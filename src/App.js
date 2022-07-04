@@ -1,23 +1,17 @@
-import logo from './logo.svg';
 import './App.css';
+import {useEffect, useRef} from "react";
+import {initThree} from "./ThreeFiles/threeInit";
 
 function App() {
+  const ref = useRef(null)
+  useEffect(() => {
+    initThree(ref);
+  }, [])
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
+    <div ref={ref}>
+      <div style={{position: 'absolute', top: 0, left: 0}}>
+        <h1 style={{color: "white"}}>Testing</h1>
+      </div>
     </div>
   );
 }
