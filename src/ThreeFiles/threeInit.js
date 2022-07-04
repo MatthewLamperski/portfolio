@@ -1,17 +1,19 @@
 import {
+  Clock,
   Color, DirectionalLight,
-  DoubleSide, FlatShading, GridHelper, Mesh,
+  DoubleSide, FlatShading, GridHelper, Mesh, MeshNormalMaterial,
   MeshPhongMaterial,
   PerspectiveCamera,
   PlaneGeometry,
   Raycaster,
-  Scene,
+  Scene, SphereGeometry, SpotLight,
   WebGLRenderer
 } from "three";
 import {OrbitControls} from "three/examples/jsm/controls/OrbitControls";
+import {World, NaiveBroadphase, Sphere, Body, Vec3, Plane} from 'cannon-es'
 import * as dat from 'dat.gui';
 
-export const initThree = (ref) => {
+export const initThree = (ref, setFunctions) => {
   // const gui = new dat.GUI();
   // const world = {
   //   plane: {
@@ -48,69 +50,113 @@ export const initThree = (ref) => {
 
   const renderer = new WebGLRenderer();
 
-  const planeGeometry = new PlaneGeometry(15, 15, 18, 18);
-  const planeMaterial = new MeshPhongMaterial({color: 0xff0000, side: DoubleSide, flatShading: FlatShading});
-  planeMaterial.opacity = 0.5;
+  const world = new World()
+  world.gravity.set(0, -9.82, 0)
+  world.broadphase = new NaiveBroadphase()
+
+  const normalMaterial = new MeshNormalMaterial()
+
+  const sphereGeometry = new SphereGeometry()
+  const sphereMesh = new Mesh(sphereGeometry, normalMaterial)
+  sphereMesh.position.y = 3
+  sphereMesh.castShadow = true
+  scene.add(sphereMesh)
+  const sphereShape = new Sphere(1)
+  const sphereBody = new Body({mass: 1})
+  sphereBody.addShape(sphereShape)
+  sphereBody.position.x = sphereMesh.position.x
+  sphereBody.position.y = sphereMesh.position.y
+  sphereBody.position.z = sphereMesh.position.z
+  world.addBody(sphereBody)
+
+  setFunctions(prevState => ({
+    ...prevState,
+    resetSphere: () => {
+      console.log("RESET")
+      sphereMesh.position.set(0, 1, 0)
+    }
+  }))
+
+  const planeGeometry = new PlaneGeometry(25, 25);
+  const planeMaterial = new MeshPhongMaterial({color: 0xa1a1a1, side: DoubleSide, flatShading: FlatShading});
   const plane = new Mesh(planeGeometry, planeMaterial);
+  plane.rotateX(-Math.PI / 2)
+  plane.receiveShadow = true;
   scene.add(plane);
+  const planeShape = new Plane()
+  const planeBody = new Body({mass: 0})
+  planeBody.addShape(planeShape)
+  planeBody.quaternion.setFromAxisAngle(new Vec3(1, 0, 0), -Math.PI / 2)
+  world.addBody(planeBody)
 
-  let {array} = plane.geometry.attributes.position;
-  for (let i = 0; i < array.length; i += 3) {
-    const x = array[i];
-    const y = array[i + 1];
-    const z = array[i + 2];
-
-    array[i + 2] = z + Math.random();
-  }
+  // let {array} = plane.geometry.attributes.position;
+  // for (let i = 0; i < array.length; i += 3) {
+  //   const x = array[i];
+  //   const y = array[i + 1];
+  //   const z = array[i + 2];
+  //
+  //   array[i + 2] = z + Math.random();
+  // }
 // console.log(dat);
 
-  const light = new DirectionalLight(0xffffff, 1);
-  light.position.set(1, 0, 1);
-  scene.add(light);
+  const light1 = new SpotLight()
+  light1.position.set(2.5, 5, 5)
+  light1.angle = Math.PI / 4
+  light1.penumbra = 0.5
+  light1.castShadow = true
+  light1.shadow.mapSize.width = 1024
+  light1.shadow.mapSize.height = 1024
+  light1.shadow.camera.near = 0.5
+  light1.shadow.camera.far = 20
+  scene.add(light1)
 
-  const backLight = new DirectionalLight(0xffffff, 1);
-  backLight.position.set(0, 0, -1);
-  scene.add(backLight);
+  const light2 = new SpotLight()
+  light2.position.set(-2.5, 5, 5)
+  light2.angle = Math.PI / 4
+  light2.penumbra = 0.5
+  light2.castShadow = true
+  light2.shadow.mapSize.width = 1024
+  light2.shadow.mapSize.height = 1024
+  light2.shadow.camera.near = 0.5
+  light2.shadow.camera.far = 20
+  scene.add(light2)
 
-  new OrbitControls(camera, renderer.domElement);
+  const controls = new OrbitControls(camera, renderer.domElement);
+  // controls.enableDamping = true;
+  controls.target.y = 0.5;
 
-  camera.position.z = 5;
+  camera.position.set(0, 2, 4);
 
-  const material = new MeshPhongMaterial({color: 0xffffff, side: DoubleSide, flatShading: FlatShading});
-
-// const loader = new STLLoader();
-// loader.load(
-//     OcalaNow,
-//     (geometry) => {
-//         const mesh = new Mesh(geometry, material);
-//         // mesh.geometry.boundingSphere.center.x = 0;
-//         // mesh.geometry.boundingSphere.center.y = 0;
-//         // mesh.geometry.boundingSphere.radius = 25;
-//         scene.add(mesh);
-//         console.log(mesh.geometry);
-//     },
-//     (xhr) => {
-//         console.log((xhr.loaded / xhr.total) * 100 + '% Loaded');
-//     },
-//     (err) => {
-//         console.log(err);
-//     }
-// );
-
-  const gridHelper = new GridHelper(50, 10, 0x39ff14, 0x39ff14);
-  scene.add(gridHelper);
 
   const mouse = {
     x: undefined,
     y: undefined,
   };
+
+  const clk = new Clock()
+  let delta;
+
   const animate = () => {
     requestAnimationFrame(animate);
+
+    controls.update()
+
+    delta = Math.min(clk.getDelta(), 0.1)
+    world.step(delta)
+
+    sphereMesh.position.set(
+      sphereBody.position.x,
+      sphereBody.position.y,
+      sphereBody.position.z,
+    )
+    sphereMesh.quaternion.set(
+      sphereBody.quaternion.x,
+      sphereBody.quaternion.y,
+      sphereBody.quaternion.z,
+      sphereBody.quaternion.w,
+    )
+
     renderer.render(scene, camera);
-    raycaster.setFromCamera(mouse, camera);
-    const intersectsPlane = raycaster.intersectObject(plane);
-    // if (intersectsPlane.length > 0) {
-    // }
   };
   animate();
 
@@ -125,5 +171,6 @@ export const initThree = (ref) => {
   });
 
   renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.shadowMap.enabled = true;
   ref.current.appendChild(renderer.domElement);
 }
